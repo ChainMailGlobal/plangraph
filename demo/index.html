@@ -116,11 +116,16 @@ async function aliases() {
     const rows = await q(c);
     const by = {};
     rows.forEach(r => { (by[r.id] = by[r.id] || {c:r.canonical, s:new Set()}).s.add(r.spelling); });
-    const multi = Object.entries(by).filter(([,v]) => v.s.size > 1);
-    const show = multi.length ? multi : Object.entries(by).slice(0,3);
-    el.innerHTML = cy(esc(c)) + show.map(([id,v]) =>
-      `<div class="path">${[...v.s].map(x=>`<span class="node">${esc(x)}</span>`).join('<span class="arrow">≡</span>')}<span class="arrow">&rarr; one node:</span><span class="node ok">${esc(v.c)}</span></div>`
-    ).join('');
+    // an alias is ANY spelling differing from the canonical sheet number --
+    // multi-spelling clusters first, then spelling!=canonical singles
+    const entries = Object.entries(by);
+    const multi  = entries.filter(([,v]) => v.s.size > 1);
+    const differ = entries.filter(([,v]) => v.s.size === 1 && [...v.s][0] !== v.c);
+    const show = (multi.length || differ.length) ? multi.concat(differ).slice(0,5) : entries.slice(0,3);
+    el.innerHTML = cy(esc(c)) + show.map(([id,v]) => {
+      const sp = [...v.s]; if (!sp.includes(v.c) && v.s.size === 1) sp.push(v.c);
+      return `<div class="path">${sp.map(x=>`<span class="node">${esc(x)}</span>`).join('<span class="arrow">≡</span>')}<span class="arrow">&rarr; one node:</span><span class="node ok">${esc(v.c)}</span></div>`;
+    }).join('');
   } catch(e){ el.textContent = e.message; }
 }
 
