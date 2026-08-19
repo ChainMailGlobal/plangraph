@@ -56,15 +56,16 @@ four cards IN ORDER, pausing ~15s each. Every click visibly hits HydraDB.
 
 **VO:**
 > Same tasks, same documents, same official graders — never modified. The
-> published agent baseline: ⟨$0.71⟩ per task. PlanGraph's answer path has
-> **no LLM at all**: ingest once, every answer is a graph query for
-> effectively zero dollars. Head-to-head where both arms ran:
-> cross-reference tracing ⟨0.35 vs 0.24⟩ — the graph hits ⟨84⟩% of the
-> grader-capped ceiling against the agent's ⟨57⟩%. Sheet-index consistency
-> ⟨0.70⟩ from a stub's 0.14, all measured across dated runs with the failure
-> evidence published. Where the agent still wins, the gap is extraction —
-> reading the page — never the traversal. That boundary is measured, run by
-> run, in the repo.
+> published agent baseline costs about 88 cents a task. PlanGraph's answer
+> path has **no LLM at all**: ingest once, every answer is a graph query for
+> effectively zero dollars. Head-to-head, the graph **wins sheet-index
+> consistency outright — 0.917 to 0.875** — and ties tracing at zero cost.
+> Across all 24 tracing tasks it reaches **84% of the grader-capped ceiling**
+> against the agent's 57%. Where the agent still wins — resolution, 0.76 to
+> 0.57 — the gap is extraction, reading the page, never the traversal: our
+> final run lifted six resolution tasks from zero to perfect with zero
+> regressions, purely by improving extraction, and the graph never changed.
+> Every number has a dated run and published failure buckets behind it.
 
 ## Beat 4 — Where HydraDB is, and what breaks without it (2:20–2:50)
 

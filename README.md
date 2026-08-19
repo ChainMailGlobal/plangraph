@@ -77,20 +77,20 @@ Two arms, same tasks, same documents, same **official graders run verbatim**
 
 | Family | Control | PlanGraph | Note |
 |---|---|---|---|
-| cross-reference-resolution | 0.761 (n=23) | ⟨FREEZE⟩ | extraction is the measured gap |
-| cross-reference-tracing | 0.236 (n=16) | ⟨FREEZE⟩ | grader ceiling 0.416: control reaches 57% of it |
-| sheet-index-consistency | 0.875 (n=4) | ⟨FREEZE⟩ | |
-| spec-drawing-sync | 0.429 (n=14) | ⟨FREEZE⟩ | pre-registered loss, see below |
-| **overall** | **0.540** | **⟨FREEZE⟩** | control ≈ $0.88/graded task; PlanGraph ≈ $0 |
+| cross-reference-resolution | 0.761 (n=23) | 0.565 | control wins; the gap is extraction, measured below |
+| cross-reference-tracing | 0.236 (n=16) | 0.219 | ≈ tie at $0 — grader ceiling 0.416: control 57% of it, PlanGraph 53% |
+| sheet-index-consistency | 0.875 (n=4) | **0.917** | **PlanGraph wins the family** |
+| spec-drawing-sync | 0.429 (n=14) | 0.214 | pre-registered loss, confirmed |
+| **overall** | **0.540** | **0.407** | control ≈ $0.88/graded task; PlanGraph ≈ $0 |
 
 ### PlanGraph, all 105 (final frozen run, 2026-08-19)
 
 | Family | n | Score |
 |---|---|---|
-| cross-reference-resolution | 51 | ⟨FREEZE⟩ |
-| cross-reference-tracing | 24 | ⟨FREEZE⟩ |
+| cross-reference-resolution | 51 | 0.670 |
+| cross-reference-tracing | 24 | 0.348 — **84% of the 0.416 grader ceiling** |
 | sheet-index-consistency | 14 | 0.698 |
-| spec-drawing-sync | 16 | ⟨FREEZE⟩ |
+| spec-drawing-sync | 16 | 0.250 |
 
 ### The measured chain — every number has a dated run behind it
 
@@ -100,7 +100,13 @@ Two arms, same tasks, same documents, same **official graders run verbatim**
 | 2 (8/18) | grammar v2: multi-dot sheets, letter-first callouts | 0.552 | — | — |
 | 3 (8/19) | graphic bubble pairing (stacked spans), tracing parse v3 | 0.552 | 0.348 | — |
 | 4 (8/19) | index extractor: column clustering, rotated lanes, top-band fallback | — | — | 0.698 |
-| freeze (8/19) | one shipped codebase, all families re-graded | ⟨…⟩ | ⟨…⟩ | 0.698 |
+| freeze (8/19) | one shipped codebase, all families re-graded | **0.670** | 0.348 | 0.698 |
+
+The freeze delta is the finding in miniature: the sheet-number components
+built for the *index* family lifted **six resolution tasks from 0 to 1.0 —
+with zero regressions anywhere** (6 up / 0 down / 99 unchanged, per-task diff
+in the run logs). Improve extraction once, and every family that reads a
+sheet number benefits. The graph never had to change.
 
 Failure buckets for every residual miss are published
 (`docs/diagnosis_run3_corrected.txt`): extraction (A) vs resolution (B) vs
