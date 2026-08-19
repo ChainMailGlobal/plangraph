@@ -111,7 +111,7 @@ async function deadEnds() {
 
 async function aliases() {
   const el = document.getElementById('out3');
-  const c = `MATCH (c:Callout)-[:TARGETS_SHEET]->(s:Sheet) RETURN DISTINCT s.norm_id AS id, s.sheet_no AS canonical, c.sheet_token AS spelling LIMIT 40`;
+  const c = `MATCH (c:Callout)-[:TARGETS_SHEET]->(s:Sheet) RETURN DISTINCT s.norm_id AS id, s.sheet_no AS canonical, c.sheet_token AS spelling LIMIT 400`;
   try {
     const rows = await q(c);
     const by = {};

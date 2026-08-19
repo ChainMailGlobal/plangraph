@@ -53,7 +53,9 @@ heuristics, index-page column clustering.
 semantics, batched `UNWIND` writes, multi-hop traversal, `algo.MSpaths`
 many-to-many resolution, reverse adjacency for "referenced-from".
 **Not present anywhere:** an LLM. The answer path is graph queries plus
-deterministic formatting. Ingest of a full drawing set: under five seconds.
+deterministic formatting. Ingest is a single CPU-bound extraction pass —
+about ten seconds for a 27-page set, minutes for the largest 167-page sets —
+and the graph writes themselves (batched UNWIND) land in under a second.
 
 > **Cypher vs SQL, one example.** "Where is detail 5/A902 referenced from,
 > across 17 sheets?" is a recursive CTE with join-table bookkeeping in SQL.
@@ -67,10 +69,11 @@ Two arms, same tasks, same documents, same **official graders run verbatim**
 (never modified, never repaired — path-rewrite into a temp workspace only).
 
 - **Control** — the benchmark's published agent configuration, unmodified
-  (Claude Sonnet via the benchmark's own harness). $50.36 for 57 graded
-  on-family tasks before the pre-set spend ceiling stopped it; head-to-head
-  is reported on those 57, PlanGraph-only on the rest — the shortfall is a
-  budget fact, stated as one.
+  (Claude Sonnet via the benchmark's own harness). $50.36 total spend —
+  $47.07 on the 57 graded on-family tasks plus $3.29 on 4 off-family probes —
+  before the pre-set spend ceiling stopped it; head-to-head is reported on
+  those 57, PlanGraph-only on the rest — the shortfall is a budget fact,
+  stated as one.
 - **PlanGraph** — all 105 graph-family tasks, ~$0 marginal (no LLM anywhere).
 
 ### Head-to-head (57 tasks where both arms ran)
@@ -81,7 +84,7 @@ Two arms, same tasks, same documents, same **official graders run verbatim**
 | cross-reference-tracing | 0.236 (n=16) | 0.219 | ≈ tie at $0 — grader ceiling 0.416: control 57% of it, PlanGraph 53% |
 | sheet-index-consistency | 0.875 (n=4) | **0.917** | **PlanGraph wins the family** |
 | spec-drawing-sync | 0.429 (n=14) | 0.214 | pre-registered loss, confirmed |
-| **overall** | **0.540** | **0.407** | control ≈ $0.88/graded task; PlanGraph ≈ $0 |
+| **overall** | **0.540** | **0.407** | control ≈ $0.83/graded task ($47.07/57); PlanGraph ≈ $0 |
 
 ### PlanGraph, all 105 (final frozen run, 2026-08-19)
 
@@ -184,8 +187,10 @@ rather than quietly dropped.
 ```bash
 # 1. HydraDB (memory backend -- LocalFileSystem lacks conditional puts, see notes)
 MSYS_NO_PATHCONV=1 docker run -d --name hydradb \
-  -p 8443:8443 -e CLOUD_PROVIDER=memory -e RUST_MIN_STACK=33554432 \
+  -p 8443:8443 -p 9090:9090 \
+  -e CLOUD_PROVIDER=memory -e RUST_MIN_STACK=33554432 \
   ghcr.io/hydra-db/hydradb:latest
+# 8443 = query API; 9090 = health (readyz) -- the benchmark runner polls it
 
 # 2. ingest a drawing set (any multi-sheet construction PDF)
 pip install pymupdf

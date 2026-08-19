@@ -36,7 +36,7 @@ the defect.
 
 Evaluated on AEC-Bench (Apache-2.0, disclosed) against the benchmark's own
 published agent baseline, same official graders run verbatim. The answer path
-contains no LLM: ingest is seconds, every answer is a HydraDB query at ~$0.
+contains no LLM: ingest once, and every answer is a HydraDB query at ~$0.
 Full pre-registered methodology, dated run chain, failure buckets, and five
 HydraDB field-note limitations with reproductions are in the repo.
 

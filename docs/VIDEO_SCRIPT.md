@@ -40,9 +40,12 @@ sheet, zoom on a callout bubble "5 / A902".
 
 ## Beat 3 — Live demo (1:00–2:20)
 
-**Screen:** `python demo/serve.py` → browser at 127.0.0.1:8000. Prep: fresh
-container, ingest the **Lear** set only. Click cards 1 → 2 → 4, then do the
-live second ingest, then card 3. Every click visibly hits HydraDB.
+**Screen:** `python demo/serve.py` → browser at 127.0.0.1:8000.
+
+**Record this beat in TWO takes** (cut them together):
+
+*Take 1 — fresh container, ingest the **Lear** set only.* Click cards
+1 → 2 → 4. Every click visibly hits HydraDB.
 
 1. **Resolve a callout** — "callout → sheet → detail, one traversal,
    milliseconds."
@@ -52,30 +55,36 @@ live second ingest, then card 3. Every click visibly hits HydraDB.
 4. **Reverse trace** — "where is this sheet referenced from? In SQL that's a
    recursive CTE. Here it's the same edges, read backwards."
 
-**Live multi-document beat:** in the terminal, ingest the second firm's set
-on camera — `python src/ingest.py <wcu pdf>` — and say: "a second firm's
-79-page electrical set, ingested in seconds, same graph." Then:
+*Between takes (off camera):* ingest the wcu set into the same graph —
+`python src/ingest.py <wcu pdf>`. This takes ~4 minutes (79 pages of
+CPU-bound extraction) — do NOT film it or call it fast.
 
-3. **Alias cluster** — click it now: callouts written **E01** collapse into
-   sheet **E001** — one node. "Different firm, different convention, same
-   entity. This is the Sam/@soham problem, solved structurally, at write
-   time." (Verified: the wcu set really contains this pair; the index also
-   lists E2-01 for title-block E201.)
+*Take 2 — both sets loaded.*
+
+3. **Alias cluster** — "we've also loaded a second firm's 79-page electrical
+   set into the same graph. Their callouts write **E01**; the sheet is
+   **E001**. One node. Different firm, different convention, same entity —
+   this is the Sam/@soham problem, solved structurally, at write time."
+   (Verified in the wcu PDF: callouts D35/E01, E03/E01 on sheets D102/D104,
+   title-block sheet E001 — they share one graph node.)
 
 **Then cut to the comparison table** (`docs/COMPARISON.md` on screen):
 
 **VO:**
 > Same tasks, same documents, same official graders — never modified. The
-> published agent baseline costs about 88 cents a task. PlanGraph's answer
+> published agent baseline costs about 83 cents a task. PlanGraph's answer
 > path has **no LLM at all**: ingest once, every answer is a graph query for
-> effectively zero dollars. Head-to-head, the graph **wins sheet-index
-> consistency outright — 0.917 to 0.875** — and ties tracing at zero cost.
-> Across all 24 tracing tasks it reaches **84% of the grader-capped ceiling**
-> against the agent's 57%. Where the agent still wins — resolution, 0.76 to
-> 0.57 — the gap is extraction, reading the page, never the traversal: our
-> final run lifted six resolution tasks from zero to perfect with zero
-> regressions, purely by improving extraction, and the graph never changed.
-> Every number has a dated run and published failure buckets behind it.
+> effectively zero dollars. Head-to-head on the 57 tasks both arms ran, the
+> graph **wins sheet-index consistency outright — 0.917 to 0.875** — and
+> tracing is nearly even, 53 to 57 percent of the grader ceiling, at zero
+> cost. And because PlanGraph runs for free, it graded **all 105 tasks** —
+> including the 48 the agent's budget never reached — where its tracing
+> reaches 84% of that ceiling. Where the agent clearly wins — resolution,
+> 0.76 to 0.57 — the gap is extraction, reading the page, never the
+> traversal: our final run lifted six resolution tasks from zero to perfect
+> with zero regressions, purely by improving extraction, and the graph never
+> changed. Every number has a dated run and published failure buckets behind
+> it.
 
 ## Beat 4 — Where HydraDB is, and what breaks without it (2:20–2:50)
 

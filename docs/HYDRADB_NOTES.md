@@ -105,5 +105,6 @@ hit every Windows contributor first.
 
 The HTTP-first design (no driver to install), the deterministic id model, and
 `MERGE`-with-`SET` batch semantics made a reproducible benchmark harness easy:
-our entire client is ~160 lines of stdlib Python (`src/hydra.py`), and a full
-drawing set ingests in under five seconds on the memory backend.
+our entire client is ~160 lines of stdlib Python (`src/hydra.py`), and the
+graph writes for a full drawing set (batched UNWIND on the memory backend)
+land in under a second — extraction, not the database, dominates ingest time.
