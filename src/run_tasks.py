@@ -1,0 +1,249 @@
+"""PlanGraph task runner: fresh graph -> ingest -> query -> output.jsonl -> official grader.
+
+Per task:
+  1. `docker restart hydradb` — memory backend, so restart = empty graph.
+     Crude and bulletproof task isolation: deterministic sheet vertex-ids would
+     otherwise collide across tasks that share source documents, letting one
+     task's sheets resolve another task's deliberately-broken callouts.
+  2. Ingest the task's PDFs (batched UNWIND, src/ingest.py — AS-IS, no
+     extraction changes before the first measured run).
+  3. Answer from the graph, deterministically. NO LLM anywhere in this file.
+  4. Grade with the task's own tests/test.sh VERBATIM in a temp workspace
+     (only the two hardcoded paths are rewritten). Graders are never modified.
+
+Families answered from the graph: cross-reference-resolution, cross-reference-
+tracing, sheet-index-consistency (graph side only, as-is), spec-drawing-sync
+(pre-registered to lose; minimal answer). Other families: "not attempted" —
+we do not throw garbage at graders.
+"""
+from __future__ import annotations
+
+import glob
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+from hydra import Hydra          # noqa: E402
+from ingest import build, norm_id  # noqa: E402
+
+BENCH = r"C:/Dev/aec-bench/tasks"
+DOCS = os.path.join(HERE, "..", "docs")
+RUNS = os.path.join(HERE, "..", "runs")
+
+FAMILIES = {
+    "intradrawing/cross-reference-resolution": "resolution",
+    "intradrawing/cross-reference-tracing": "tracing",
+    "intradrawing/sheet-index-consistency": "sheet_index",
+    "intraproject/spec-drawing-sync": "spec_sync",
+}
+
+
+# ---------------------------------------------------------------- graph reset
+
+def fresh_graph(timeout=60):
+    subprocess.run(["docker", "restart", "hydradb"], capture_output=True, timeout=120)
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        try:
+            import urllib.request
+            with urllib.request.urlopen("http://127.0.0.1:9090/readyz", timeout=3) as r:
+                if r.status == 200:
+                    return True
+        except Exception:
+            pass
+        time.sleep(1.5)
+    return False
+
+
+# ---------------------------------------------------------------- answers
+
+def q_broken(h, page_sheet=None):
+    rows = h.rows("MATCH (s)-[:REFERENCES]->(c) WHERE c.resolved = false "
+                  "RETURN c.src_sheet AS src, c.raw AS raw, c.det_token AS det, "
+                  "c.sheet_token AS tgt, c.resolution AS why")
+    if page_sheet:
+        want = norm_id(page_sheet)
+        rows = [r for r in rows if norm_id(r["src"] or "") == want]
+    return rows
+
+
+def answer_resolution(h, instruction):
+    """Broken cross-references, optionally scoped to the page the task names."""
+    sheet = None
+    m = re.search(r"page\s+(\d+)", instruction, re.I)
+    page_no = int(m.group(1)) if m else None
+    if page_no:
+        r = h.rows("MATCH (s:Sheet) WHERE s.page = %d RETURN s.sheet_no AS sn" % page_no)
+        sheet = r[0]["sn"] if r else None
+    rows = q_broken(h, sheet)
+    lines = []
+    for r in rows:
+        raw = (r["raw"] or "").strip()
+        compact = raw.replace(" ", "")
+        if r["why"] == "missing_detail":
+            title = ("%s (%s) on %s: detail %s not found on sheet %s"
+                     % (raw, compact, r["src"], r["det"], r["tgt"]))
+        else:
+            title = ("%s (%s) on %s: target sheet %s not found in set"
+                     % (raw, compact, r["src"], r["tgt"]))
+        lines.append({"title": title, "sheet_number": r["src"] or "N/A"})
+    if not lines:
+        lines = [{"title": "No issues found", "sheet_number": "N/A"}]
+    return lines
+
+
+def answer_tracing(h, instruction):
+    """Reverse trace: everywhere detail D of sheet S is called out from."""
+    m = re.search(r"[Dd]etail\s+(\d{1,2}[A-Za-z]?)\s+on\s+[Ss]heet\s+([A-Z]{1,3}[-.]?\d[\d.\-]*)",
+                  instruction)
+    if not m:
+        m = re.search(r"(\d{1,2}[A-Za-z]?)\s*/\s*([A-Z]{1,3}[-.]?\d[\d.\-]*)", instruction)
+    if not m:
+        return [{"title": "No issues found", "sheet_number": "N/A"}]
+    det, tgt = m.group(1).upper(), norm_id(m.group(2))
+    rows = h.rows("MATCH (s)-[:REFERENCES]->(c) "
+                  "RETURN s.sheet_no AS src, c.det_token AS det, c.sheet_token AS tgt")
+    hits, seen = [], set()
+    for r in rows:
+        if (r["det"] or "").upper() == det and norm_id(r["tgt"] or "") == tgt:
+            src = r["src"] or "?"
+            if src not in seen:
+                seen.add(src)
+                hits.append({"title": "Referenced from %s" % src, "sheet_number": src})
+    if not hits:
+        hits = [{"title": "No references found - detail may be orphaned",
+                 "sheet_number": "N/A"}]
+    return hits
+
+
+def answer_sheet_index(h, instruction):
+    """AS-IS run: the graph knows sheets present, but has no IndexEntry
+    extractor yet, so listed-but-absent cannot be derived. Honest minimal
+    answer; expected to score only on clean variants. Measured first."""
+    return [{"title": "No issues found", "sheet_number": "N/A"}]
+
+
+def answer_spec_sync(h, instruction):
+    """Pre-registered to lose: no spec-requirement comparison in the graph."""
+    return [{"title": "No issues found", "sheet_number": "N/A"}]
+
+
+ANSWERERS = {
+    "resolution": answer_resolution,
+    "tracing": answer_tracing,
+    "sheet_index": answer_sheet_index,
+    "spec_sync": answer_spec_sync,
+}
+
+
+# ---------------------------------------------------------------- grading
+
+def grade(task_dir, output_text):
+    """Run the task's own test.sh VERBATIM; only /workspace and /logs paths
+    are rewritten to a temp dir. Never modify grader logic."""
+    ws = tempfile.mkdtemp(prefix="plangraph_ws_")
+    try:
+        logs = os.path.join(ws, "logs", "verifier")
+        os.makedirs(logs)
+        with open(os.path.join(ws, "output.jsonl"), "w", encoding="utf-8") as f:
+            f.write(output_text)
+        src = open(os.path.join(task_dir, "tests", "test.sh"),
+                   encoding="utf-8", errors="replace").read()
+        wsp = ws.replace("\\", "/")
+        src = src.replace("/workspace", wsp).replace("/logs/verifier", wsp + "/logs/verifier")
+        sh = os.path.join(ws, "test.sh")
+        with open(sh, "w", encoding="utf-8", newline="\n") as f:
+            f.write(src)
+        bash = r"C:\Program Files\Git\bin\bash.exe"
+        subprocess.run([bash, sh], capture_output=True, timeout=180)
+        with open(os.path.join(ws, "logs", "verifier", "reward.json"), encoding="utf-8") as f:
+            return float(json.load(f).get("reward", 0.0))
+    except Exception:
+        return 0.0
+    finally:
+        shutil.rmtree(ws, ignore_errors=True)
+
+
+# ---------------------------------------------------------------- main loop
+
+def task_pdfs(task_dir):
+    out = []
+    for root, _, fs in os.walk(os.path.join(task_dir, "environment")):
+        out += [os.path.join(root, f) for f in fs if f.lower().endswith(".pdf")]
+    return sorted(out)
+
+
+def run_task(rel):
+    fam_dir = rel.rsplit("/", 1)[0]
+    kind = FAMILIES.get(fam_dir)
+    task_dir = os.path.join(BENCH, rel)
+    name = os.path.basename(rel)
+    t0 = time.time()
+    if kind is None:
+        return {"task": name, "family": fam_dir, "reward": None,
+                "note": "not_attempted", "wall_s": 0}
+    if not fresh_graph():
+        return {"task": name, "family": fam_dir, "reward": 0.0,
+                "note": "graph_restart_failed", "wall_s": round(time.time() - t0, 1)}
+    h = Hydra()
+    stats = []
+    try:
+        for pdf in task_pdfs(task_dir):
+            stats.append(build(pdf, h, verbose=False))
+    except Exception as e:
+        return {"task": name, "family": fam_dir, "reward": 0.0,
+                "note": "ingest_error: " + str(e)[:80],
+                "wall_s": round(time.time() - t0, 1)}
+    instruction = open(os.path.join(task_dir, "instruction.md"),
+                       encoding="utf-8", errors="replace").read()
+    lines = ANSWERERS[kind](h, instruction)
+    out_text = "\n".join(json.dumps(l) for l in lines) + "\n"
+    run_dir = os.path.join(RUNS, name)
+    os.makedirs(run_dir, exist_ok=True)
+    with open(os.path.join(run_dir, "output.jsonl"), "w", encoding="utf-8") as f:
+        f.write(out_text)
+    reward = grade(task_dir, out_text)
+    return {"task": name, "family": fam_dir, "reward": reward,
+            "n_lines": len(lines),
+            "ingest": {"sheets": sum(s["sheets"] for s in stats),
+                       "callouts": sum(s["callouts"] for s in stats)},
+            "wall_s": round(time.time() - t0, 1)}
+
+
+def main():
+    only = sys.argv[1] if len(sys.argv) > 1 else None
+    tasks = []
+    for fam in sorted(FAMILIES):
+        for d in sorted(glob.glob(os.path.join(BENCH, fam, "*"))):
+            if os.path.isdir(d) and os.path.exists(os.path.join(d, "tests", "test.sh")):
+                tasks.append(fam + "/" + os.path.basename(d))
+    if only:
+        tasks = [t for t in tasks if only in t]
+    out_path = os.path.join(DOCS, "plangraph_results.jsonl")
+    done = set()
+    if os.path.exists(out_path):
+        for l in open(out_path, encoding="utf-8"):
+            try:
+                done.add(json.loads(l)["task"])
+            except Exception:
+                pass
+    todo = [t for t in tasks if os.path.basename(t) not in done]
+    print("%d tasks (%d already done)" % (len(todo), len(done)), flush=True)
+    for i, rel in enumerate(todo, 1):
+        rec = run_task(rel)
+        with open(out_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+        print("%3d/%d  %-46s reward=%s  (%ss)%s"
+              % (i, len(todo), rec["task"][:46], rec["reward"], rec["wall_s"],
+                 "  " + rec.get("note", "") if rec.get("note") else ""), flush=True)
+
+
+if __name__ == "__main__":
+    main()
