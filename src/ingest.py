@@ -155,6 +155,49 @@ def sheet_details(spans, W, H):
     return {t for t, s in cands if s >= 0.80 * top}
 
 
+DET_SPAN = re.compile(r"^([A-Z]?\d{1,2}[A-Z]?)$")
+
+
+def bubble_callouts(spans):
+    """Graphic callout bubbles: a detail token stacked ABOVE a sheet token
+    (the circle-with-divider convention). Two separate spans, no slash — the
+    inline CALLOUT regex cannot see these. Measured fix #4: every scoreable
+    tracing task failed because its references are drawn this way.
+
+    Pairing rule: detail-shaped span whose box x-overlaps a sheet-shaped span
+    below it, with a vertical gap under 60% of the detail span's height, and
+    both in similar (display) sizes.
+    """
+    dets, sheets = [], []
+    grid = {}                       # x-bucket -> sheet spans (kills the O(n^2))
+    for text, (x0, y0, x1, y1), size in spans:
+        t = text.strip().upper()
+        if SHEET_TOKEN.match(t) and any(ch.isdigit() for ch in t):
+            rec = (t, x0, y0, x1, y1, size)
+            sheets.append(rec)
+            grid.setdefault(int(x0 // 150), []).append(rec)
+        if DET_SPAN.match(t):
+            dets.append((t, x0, y0, x1, y1, size))
+    out = []
+    for dt, dx0, dy0, dx1, dy1, dsz in dets:
+        h = max(dy1 - dy0, 1.0)
+        bucket = int(dx0 // 150)
+        for st, sx0, sy0, sx1, sy1, ssz in (
+                grid.get(bucket, []) + grid.get(bucket - 1, []) + grid.get(bucket + 1, [])):
+            if st == dt:
+                continue
+            x_overlap = min(dx1, sx1) - max(dx0, sx0)
+            gap = sy0 - dy1
+            # measured on a real bubble (B1 over A511, wcu p51): gap was 0.7h,
+            # the old 0.6h ceiling missed it by one point. 1.3h with slight
+            # overlap allowed covers the drawn divider line between the tokens.
+            if x_overlap > 0.3 * (dx1 - dx0) and -0.3 * h <= gap <= 1.3 * h \
+                    and 0.5 <= (ssz / dsz if dsz else 1) <= 2.0:
+                out.append({"raw": dt + "/" + st, "detail": dt, "sheet": st})
+                break
+    return out
+
+
 def extract(pdf_path, max_pages=None):
     """PDF -> [{page, sheet_no, title, text, callouts}]"""
     import fitz
@@ -173,6 +216,11 @@ def extract(pdf_path, max_pages=None):
             calls.append({"raw": m.group(0).strip(),
                           "detail": m.group(1).upper(),
                           "sheet": m.group(2).upper()})
+        # graphic bubbles (stacked spans) — dedupe against inline finds
+        seen_pairs = {(c["detail"], c["sheet"]) for c in calls}
+        for b in bubble_callouts(spans):
+            if (b["detail"], b["sheet"]) not in seen_pairs:
+                calls.append(b)
         pages.append({"page": i + 1, "sheet_no": sheet_no,
                       "text": text, "callouts": calls,
                       "details": sorted(sheet_details(spans, W, H))})
