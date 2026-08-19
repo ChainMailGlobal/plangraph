@@ -50,10 +50,16 @@ def norm_id(sheet_no: str) -> str:
 # Covers A452, A-452, A4.52, L4-01, S1-0, PG-21, E210, M001.
 # The second separator group is what real AEC numbering needs and what an
 # earlier version missed -- it silently found zero sheets on a whole set.
-SHEET_PAT = r"[A-Z]{1,3}[-.]?\d{1,4}(?:[-.]\d{1,3})?[A-Z]?"
+# v2 grammar — the measured fix from the as-is run's bucket-A list: sheet ids
+# with MULTIPLE dot/dash groups (T7.1.1, A9.2.5, D101.3) were invisible to v1,
+# which allowed at most one trailing group.
+SHEET_PAT = r"[A-Z]{1,3}[-.]?\d{1,4}(?:[-.]\d{1,3}){0,3}[A-Z]?"
 
-# 3/A501, 5 / A902, 12/S201, 1/A3.2, 2/L4-01
-CALLOUT = re.compile(r"\b(\d{1,2}[A-Z]?)\s*/\s*(" + SHEET_PAT + r")\b")
+# v2 detail token — digit-first (3, 12A), letter-first (A5, B12), or a short
+# range (2-3); all three shapes appear verbatim in the bucket-A defect list.
+# 3/A501, 5 / A902, 46 / A9.2.5, A5/G106, 2-3/LH501
+CALLOUT = re.compile(
+    r"\b(\d{1,2}[A-Z]?|[A-Z]\d{1,2}|\d{1,2}\s*-\s*\d{1,2})\s*/\s*(" + SHEET_PAT + r")\b")
 
 # a plausible sheet identifier on its own
 SHEET_TOKEN = re.compile(r"^" + SHEET_PAT + r"$")

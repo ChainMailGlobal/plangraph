@@ -101,8 +101,13 @@ def answer_resolution(h, instruction):
 
 def answer_tracing(h, instruction):
     """Reverse trace: everywhere detail D of sheet S is called out from."""
-    m = re.search(r"[Dd]etail\s+(\d{1,2}[A-Za-z]?)\s+on\s+[Ss]heet\s+([A-Z]{1,3}[-.]?\d[\d.\-]*)",
-                  instruction)
+    # v2 parse (measured fix): instructions phrase the target as
+    # "references 2 on sheet A851" — no word "detail". Accept both, plus N/S.
+    m = re.search(r"references\s+(\d{1,2}[A-Za-z]?)\s+on\s+sheet\s+([A-Z]{1,3}[-.]?\d[\d.\-]*)",
+                  instruction, re.I)
+    if not m:
+        m = re.search(r"[Dd]etail\s+(\d{1,2}[A-Za-z]?)\s+on\s+[Ss]heet\s+([A-Z]{1,3}[-.]?\d[\d.\-]*)",
+                      instruction)
     if not m:
         m = re.search(r"(\d{1,2}[A-Za-z]?)\s*/\s*([A-Z]{1,3}[-.]?\d[\d.\-]*)", instruction)
     if not m:
