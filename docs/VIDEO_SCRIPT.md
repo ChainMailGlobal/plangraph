@@ -99,7 +99,12 @@ slowly.
 > keep consistent. We also shipped field notes — five real limitations we hit,
 > each with a reproduction and the workaround we used, from conditional-put
 > gaps on the local backend to a silent pair-dropping mode in MSpaths.
-> That's the report of someone who actually built on it. PlanGraph:
+> That's the report of someone who actually built on it. And the reason this
+> matters beyond one bid set: every reviewer correction lands in the graph as
+> a stored, traceable fact. When a thirty-year plan reviewer retires, their
+> judgment doesn't walk out the door with them — it's in the graph, with the
+> traversal that justified every call. That's the brief's real ask —
+> enterprise knowledge that outlives the people who created it. PlanGraph:
 > the drawing set as a graph — on HydraDB.
 
 ---
