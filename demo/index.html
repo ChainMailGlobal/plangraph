@@ -8,8 +8,8 @@
           --ok:#4ade80; --bad:#f87171; --acc:#60a5fa; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
-         font:15px/1.5 ui-monospace,Consolas,monospace; padding:2rem; }
-  h1 { font-size:1.3rem; margin:0 0 .2rem; }
+         font:17px/1.55 ui-monospace,Consolas,monospace; padding:2rem; }
+  h1 { font-size:1.6rem; margin:0 0 .2rem; }
   .sub { color:var(--dim); margin-bottom:1.5rem; }
   .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
           gap:1rem; }
@@ -20,11 +20,11 @@
   button { background:var(--acc); color:#08101f; border:0; border-radius:6px;
            padding:.45rem .9rem; font:inherit; font-weight:700; cursor:pointer; }
   button:hover { filter:brightness(1.1); }
-  pre { background:#0b101c; border-radius:6px; padding:.7rem; overflow-x:auto;
-        font-size:.8rem; min-height:3rem; white-space:pre-wrap; }
+  pre { background:#0b101c; border-radius:6px; padding:.8rem; overflow-x:auto;
+        font-size:.95rem; min-height:3rem; white-space:pre-wrap; }
   .ok  { color:var(--ok); }
   .bad { color:var(--bad); }
-  .cy  { color:#c4b5fd; font-size:.75rem; }
+  .cy  { color:#c4b5fd; font-size:.8rem; margin-bottom:.4rem; }
   .path { margin:.3rem 0; }
   .node { display:inline-block; background:#1e2a45; border:1px solid #35507e;
           border-radius:5px; padding:.1rem .5rem; }
@@ -144,5 +144,6 @@ async function reverse() {
   } catch(e){ el.textContent = e.message; }
 }
 </script>
+<div style="margin-top:2rem;color:#5b6478;font-size:.8rem">PlanGraph &middot; INViSU AI &middot; Hack Hydra 2026 &middot; built on HydraDB</div>
 </body>
 </html>
