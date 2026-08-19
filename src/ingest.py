@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import os
 import sys
 
 # --- identity ------------------------------------------------------------
@@ -492,9 +493,9 @@ def build(pdf_path, hydra, doc_name=None, max_pages=None, verbose=True):
 
 
 if __name__ == "__main__":
-    sys.path.insert(0, r"C:/Dev/plangraph/src")
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from hydra import Hydra
 
     path = sys.argv[1]
     mp = int(sys.argv[2]) if len(sys.argv) > 2 else None
-    build(path, Hydra(), max_pages=mp)
+    print(build(path, Hydra(), max_pages=mp))

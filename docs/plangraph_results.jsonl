@@ -15,3 +15,13 @@
 {"task": "2021-0525_uccs-cybersecurity-broken", "family": "intradrawing/cross-reference-resolution", "reward": 0.67, "n_lines": 35, "ingest": {"sheets": 114, "callouts": 307}, "wall_s": 18.2}
 {"task": "cross-reference-resolution-example", "family": "intradrawing/cross-reference-resolution", "reward": 1.0, "n_lines": 1, "ingest": {"sheets": 21, "callouts": 172}, "wall_s": 10.0}
 {"task": "darrington-library-architectural", "family": "intradrawing/cross-reference-resolution", "reward": 1.0, "n_lines": 13, "ingest": {"sheets": 22, "callouts": 36}, "wall_s": 11.9}
+{"task": "darrington-library-details-01", "family": "intradrawing/cross-reference-resolution", "reward": 1.0, "n_lines": 1, "ingest": {"sheets": 22, "callouts": 36}, "wall_s": 13.1}
+{"task": "darrington-library-details-02", "family": "intradrawing/cross-reference-resolution", "reward": 1.0, "n_lines": 15, "ingest": {"sheets": 22, "callouts": 36}, "wall_s": 11.7}
+{"task": "lear-theater-landscape-01", "family": "intradrawing/cross-reference-resolution", "reward": 1.0, "n_lines": 1, "ingest": {"sheets": 21, "callouts": 172}, "wall_s": 10.4}
+{"task": "lear-theater-landscape-02-01", "family": "intradrawing/cross-reference-resolution", "reward": 1.0, "n_lines": 1, "ingest": {"sheets": 21, "callouts": 172}, "wall_s": 10.0}
+{"task": "lear-theater-landscape-02-02", "family": "intradrawing/cross-reference-resolution", "reward": 1.0, "n_lines": 1, "ingest": {"sheets": 21, "callouts": 172}, "wall_s": 9.1}
+{"task": "lear-theater-landscape-03-01", "family": "intradrawing/cross-reference-resolution", "reward": 1.0, "n_lines": 1, "ingest": {"sheets": 21, "callouts": 172}, "wall_s": 9.0}
+{"task": "lear-theater-landscape-03-02", "family": "intradrawing/cross-reference-resolution", "reward": 1.0, "n_lines": 1, "ingest": {"sheets": 21, "callouts": 172}, "wall_s": 9.9}
+{"task": "lear-theater-landscape-03-03", "family": "intradrawing/cross-reference-resolution", "reward": 1.0, "n_lines": 1, "ingest": {"sheets": 21, "callouts": 172}, "wall_s": 10.1}
+{"task": "lear-theater-landscape-03-04", "family": "intradrawing/cross-reference-resolution", "reward": 1.0, "n_lines": 1, "ingest": {"sheets": 21, "callouts": 172}, "wall_s": 11.1}
+{"task": "north-macon-architectural", "family": "intradrawing/cross-reference-resolution", "reward": 1.0, "n_lines": 1, "ingest": {"sheets": 42, "callouts": 75}, "wall_s": 159.9}

@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>PlanGraph — live graph demo</title>
+<style>
+  :root { --bg:#0f1420; --panel:#171e2e; --ink:#e8ecf4; --dim:#8b94a7;
+          --ok:#4ade80; --bad:#f87171; --acc:#60a5fa; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.5 ui-monospace,Consolas,monospace; padding:2rem; }
+  h1 { font-size:1.3rem; margin:0 0 .2rem; }
+  .sub { color:var(--dim); margin-bottom:1.5rem; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
+          gap:1rem; }
+  .card { background:var(--panel); border:1px solid #232c42; border-radius:10px;
+          padding:1rem 1.2rem; }
+  .card h2 { font-size:1rem; margin:0 0 .5rem; color:var(--acc); }
+  .card p  { color:var(--dim); font-size:.85rem; margin:.2rem 0 .8rem; }
+  button { background:var(--acc); color:#08101f; border:0; border-radius:6px;
+           padding:.45rem .9rem; font:inherit; font-weight:700; cursor:pointer; }
+  button:hover { filter:brightness(1.1); }
+  pre { background:#0b101c; border-radius:6px; padding:.7rem; overflow-x:auto;
+        font-size:.8rem; min-height:3rem; white-space:pre-wrap; }
+  .ok  { color:var(--ok); }
+  .bad { color:var(--bad); }
+  .cy  { color:#c4b5fd; font-size:.75rem; }
+  .path { margin:.3rem 0; }
+  .node { display:inline-block; background:#1e2a45; border:1px solid #35507e;
+          border-radius:5px; padding:.1rem .5rem; }
+  .arrow { color:var(--dim); padding:0 .3rem; }
+</style>
+</head>
+<body>
+<h1>PlanGraph — the drawing set as a graph</h1>
+<div class="sub">Every query below runs LIVE against HydraDB over its HTTP API. No cache, no LLM.</div>
+
+<div class="grid">
+
+<div class="card">
+  <h2>1 &middot; Resolve a callout</h2>
+  <p>A detail bubble on a plan says <b>“5 / A902”</b>. Does that detail exist
+     on that sheet? One traversal: Callout &rarr; TARGETS_SHEET &rarr; Sheet
+     &rarr; HAS_DETAIL &rarr; Detail.</p>
+  <button onclick="resolveOk()">Run</button>
+  <pre id="out1">—</pre>
+</div>
+
+<div class="card">
+  <h2>2 &middot; The dead end — absence is the defect</h2>
+  <p>A callout referencing a sheet or detail the set does not contain. The
+     graph doesn’t guess: the verdict was materialised at ingest, because a
+     traversal that terminates in nothing IS the finding.</p>
+  <button onclick="deadEnds()">Run</button>
+  <pre id="out2">—</pre>
+</div>
+
+<div class="card">
+  <h2>3 &middot; Alias cluster — entity resolution</h2>
+  <p>“A-452”, “A4.52”, “A452” are one sheet — the Track&nbsp;01
+     Sam&nbsp;/&nbsp;@soham&nbsp;/&nbsp;S.&nbsp;Ratnaparkhi problem in
+     construction clothing. Every raw spelling collapses to one node.</p>
+  <button onclick="aliases()">Run</button>
+  <pre id="out3">—</pre>
+</div>
+
+<div class="card">
+  <h2>4 &middot; Reverse trace</h2>
+  <p>“Where is this sheet referenced from?” — reverse adjacency, one MATCH.
+     In SQL this is a recursive CTE; here it is the natural direction of the
+     same edges.</p>
+  <button onclick="reverse()">Run</button>
+  <pre id="out4">—</pre>
+</div>
+
+</div>
+
+<script>
+async function q(cypher) {
+  const r = await fetch('/query', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({cypher})});
+  const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  return j.rows;
+}
+const cy = s => `<div class="cy">${s}</div>`;
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+async function resolveOk() {
+  const el = document.getElementById('out1');
+  const c = `MATCH (c:Callout)-[:TARGETS_SHEET]->(s:Sheet) WHERE c.resolution = 'ok' RETURN c.raw AS raw, c.src_sheet AS src, s.sheet_no AS target, c.det_token AS det LIMIT 5`;
+  try {
+    const rows = await q(c);
+    el.innerHTML = cy(esc(c)) + rows.map(r =>
+      `<div class="path"><span class="node">${esc(r.src)}</span><span class="arrow">—“${esc(r.raw)}”&rarr;</span><span class="node">${esc(r.target)}</span><span class="arrow">&rarr;</span><span class="node ok">detail ${esc(r.det)} ✓</span></div>`
+    ).join('') || 'no resolved callouts in graph';
+  } catch(e){ el.textContent = e.message; }
+}
+
+async function deadEnds() {
+  const el = document.getElementById('out2');
+  const c = `MATCH (s:Sheet)-[:REFERENCES]->(c:Callout) WHERE c.resolved = false RETURN c.raw AS raw, s.sheet_no AS src, c.resolution AS verdict LIMIT 5`;
+  try {
+    const rows = await q(c);
+    el.innerHTML = cy(esc(c)) + rows.map(r =>
+      `<div class="path"><span class="node">${esc(r.src)}</span><span class="arrow">—“${esc(r.raw)}”&rarr;</span><span class="node bad">∅ ${esc(r.verdict)}</span></div>`
+    ).join('') || '<span class="ok">no dead ends — every reference in this set resolves ✓</span>';
+  } catch(e){ el.textContent = e.message; }
+}
+
+async function aliases() {
+  const el = document.getElementById('out3');
+  const c = `MATCH (c:Callout)-[:TARGETS_SHEET]->(s:Sheet) RETURN DISTINCT s.norm_id AS id, s.sheet_no AS canonical, c.sheet_token AS spelling LIMIT 40`;
+  try {
+    const rows = await q(c);
+    const by = {};
+    rows.forEach(r => { (by[r.id] = by[r.id] || {c:r.canonical, s:new Set()}).s.add(r.spelling); });
+    const multi = Object.entries(by).filter(([,v]) => v.s.size > 1);
+    const show = multi.length ? multi : Object.entries(by).slice(0,3);
+    el.innerHTML = cy(esc(c)) + show.map(([id,v]) =>
+      `<div class="path">${[...v.s].map(x=>`<span class="node">${esc(x)}</span>`).join('<span class="arrow">≡</span>')}<span class="arrow">&rarr; one node:</span><span class="node ok">${esc(v.c)}</span></div>`
+    ).join('');
+  } catch(e){ el.textContent = e.message; }
+}
+
+async function reverse() {
+  const el = document.getElementById('out4');
+  const c = `MATCH (s:Sheet)-[:REFERENCES]->(c:Callout)-[:TARGETS_SHEET]->(t:Sheet) RETURN t.sheet_no AS target, s.sheet_no AS src, c.raw AS raw LIMIT 8`;
+  try {
+    const rows = await q(c);
+    const by = {};
+    rows.forEach(r => (by[r.target] = by[r.target] || []).push(r));
+    const [target, refs] = Object.entries(by).sort((a,b)=>b[1].length-a[1].length)[0] || [null,[]];
+    el.innerHTML = cy(esc(c)) + (target ?
+      `<div class="path"><span class="node ok">${esc(target)}</span> is referenced from:</div>` +
+      refs.map(r=>`<div class="path"><span class="arrow">&larr; “${esc(r.raw)}” on</span><span class="node">${esc(r.src)}</span></div>`).join('')
+      : 'no cross-references in graph');
+  } catch(e){ el.textContent = e.message; }
+}
+</script>
+</body>
+</html>
