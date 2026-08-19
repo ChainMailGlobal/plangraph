@@ -54,7 +54,14 @@ def main():
     print("MSpaths: %d source callouts x %d target sheets -> %d paths in ONE call"
           % (len(det_keys), len(sheet_ids), len(rows)))
     for r in rows[:8]:
-        print("  path:", r)
+        try:
+            nodes = r[0]["value"]["nodes"]
+            raw = nodes[0]["properties"]["raw"]["String"]
+            tgt = nodes[-1]["properties"]["sheet_no"]["String"]
+            print("  %-14s -> %s" % (raw, tgt))
+        except Exception:
+            print("  path:", str(r)[:120])
+    print("  (every path above is a resolved reference; the planted defect has NO path)")
 
 
 if __name__ == "__main__":

@@ -40,17 +40,27 @@ sheet, zoom on a callout bubble "5 / A902".
 
 ## Beat 3 — Live demo (1:00–2:20)
 
-**Screen:** `python demo/serve.py` → browser at 127.0.0.1:8000. Click the
-four cards IN ORDER, pausing ~15s each. Every click visibly hits HydraDB.
+**Screen:** `python demo/serve.py` → browser at 127.0.0.1:8000. Prep: fresh
+container, ingest the **Lear** set only. Click cards 1 → 2 → 4, then do the
+live second ingest, then card 3. Every click visibly hits HydraDB.
 
 1. **Resolve a callout** — "callout → sheet → detail, one traversal,
    milliseconds."
-2. **Dead end** — "this reference points at nothing. Nobody hallucinates an
-   answer; the missing edge IS the finding."
-3. **Alias cluster** — "three spellings, one node. This is the Sam/@soham
-   problem, solved structurally."
+2. **Dead end** — "7 slash L7-01 — a real planted defect. This reference
+   points at nothing. Nobody hallucinates an answer; the missing edge IS the
+   finding." (Lear-only graph keeps this card clean: exactly one dead end.)
 4. **Reverse trace** — "where is this sheet referenced from? In SQL that's a
    recursive CTE. Here it's the same edges, read backwards."
+
+**Live multi-document beat:** in the terminal, ingest the second firm's set
+on camera — `python src/ingest.py <wcu pdf>` — and say: "a second firm's
+79-page electrical set, ingested in seconds, same graph." Then:
+
+3. **Alias cluster** — click it now: callouts written **E01** collapse into
+   sheet **E001** — one node. "Different firm, different convention, same
+   entity. This is the Sam/@soham problem, solved structurally, at write
+   time." (Verified: the wcu set really contains this pair; the index also
+   lists E2-01 for title-block E201.)
 
 **Then cut to the comparison table** (`docs/COMPARISON.md` on screen):
 
@@ -87,7 +97,10 @@ slowly.
 
 ## Recording checklist
 
-- [ ] HydraDB container up (`memory` backend), Lear set ingested
+- [ ] HydraDB container up (`memory` backend), Lear set ingested:
+      `tasks/intradrawing/cross-reference-resolution/lear-theater-landscape-03-01/environment/Bid_set_-_Lear_Theater_240610.pdf`
+- [ ] wcu set path ready in the terminal for the live-ingest beat:
+      `tasks/intradrawing/cross-reference-tracing/wcu-a1-a523-medium/environment/16-15506-04E-WCU-FD3-DWG.pdf`
 - [ ] All four demo cards clicked once BEFORE recording (warm, no surprises)
 - [ ] `docs/COMPARISON.md` numbers final (freeze run) and matching the VO
 - [ ] Track 01 brief open in a tab; SCHEMA.md open; HYDRADB_NOTES.md open
