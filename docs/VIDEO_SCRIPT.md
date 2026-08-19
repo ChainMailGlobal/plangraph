@@ -1,8 +1,7 @@
 # PlanGraph — 3-minute video script
 
-Target: 2:50. Screen recording + voiceover. Numbers marked ⟨…⟩ get filled
-from the frozen results table before recording — read them off
-`docs/COMPARISON.md`, never from memory.
+Target: 2:55. Screen recording + voiceover. Read every number off
+`docs/COMPARISON.md` on screen, never from memory.
 
 ---
 
@@ -50,8 +49,8 @@ sheet, zoom on a callout bubble "5 / A902".
 1. **Resolve a callout** — "callout → sheet → detail, one traversal,
    milliseconds."
 2. **Dead end** — "7 slash L7-01 — a real planted defect. This reference
-   points at nothing. Nobody hallucinates an answer; the missing edge IS the
-   finding." (Lear-only graph keeps this card clean: exactly one dead end.)
+   points at nothing, and the missing edge IS the finding." (Lear-only graph
+   keeps this card clean: exactly one dead end.)
 4. **Reverse trace** — "where is this sheet referenced from? In SQL that's a
    recursive CTE. Here it's the same edges, read backwards."
 
@@ -70,42 +69,45 @@ CPU-bound extraction) — do NOT film it or call it fast.
 
 **Then cut to the comparison table** (`docs/COMPARISON.md` on screen):
 
-**VO:**
-> Same tasks, same documents, same official graders — never modified. The
-> published agent baseline costs about 83 cents a task. PlanGraph's answer
-> path has **no LLM at all**: ingest once, every answer is a graph query for
-> effectively zero dollars. Head-to-head on the 57 tasks both arms ran, the
-> graph **wins sheet-index consistency outright — 0.917 to 0.875** — and
-> tracing is nearly even, 53 to 57 percent of the grader ceiling, at zero
-> cost. And because PlanGraph runs for free, it graded **all 105 tasks** —
-> including the 48 the agent's budget never reached — where its tracing
-> reaches 84% of that ceiling. Where the agent clearly wins — resolution,
-> 0.76 to 0.57 — the gap is extraction, reading the page, never the
-> traversal: our final run lifted six resolution tasks from zero to perfect
-> with zero regressions, purely by improving extraction, and the graph never
-> changed. Every number has a dated run and published failure buckets behind
-> it.
+**VO — three claims, the table carries the rest:**
+> Same tasks, same documents, same official graders — never modified. Three
+> results. One: the graph **wins sheet-index consistency outright — 0.917 to
+> 0.875**. Two: where the agent wins — resolution — the gap is extraction,
+> reading the page, never the traversal. We proved that on the final run:
+> six resolution tasks went from zero to perfect purely by improving
+> extraction, zero regressions, and the graph never changed. Three: cost.
+> The agent baseline is about 83 cents a task. PlanGraph has **no LLM
+> anywhere** — after ingest, every answer is a graph query for effectively
+> zero dollars, which is how it graded all 105 tasks, including the 48 the
+> agent's budget never reached. Every number on this table has a dated run
+> and published failure buckets behind it.
 
-## Beat 4 — Where HydraDB is, and what breaks without it (2:20–2:50)
+## Beat 4 — The boundary, in one breath (2:20–2:35)
 
 **Screen:** README boundary section, then `docs/HYDRADB_NOTES.md` scrolled
 slowly.
 
 **VO:**
-> The boundary is clean: PyMuPDF and our grammar do perception; HydraDB does
-> everything relational — the identity graph, multi-hop traversal, reverse
-> adjacency, batched UNWIND writes over the HTTP API. Take HydraDB out and
-> every "does this exist" question becomes joins we'd have to hand-build and
-> keep consistent. We also shipped field notes — five real limitations we hit,
-> each with a reproduction and the workaround we used, from conditional-put
-> gaps on the local backend to a silent pair-dropping mode in MSpaths.
-> That's the report of someone who actually built on it. And the reason this
-> matters beyond one bid set: every reviewer correction lands in the graph as
-> a stored, traceable fact. When a thirty-year plan reviewer retires, their
-> judgment doesn't walk out the door with them — it's in the graph, with the
-> traversal that justified every call. That's the brief's real ask —
-> enterprise knowledge that outlives the people who created it. PlanGraph:
-> the drawing set as a graph — on HydraDB.
+> The boundary is one sentence: our code does perception — PyMuPDF and a
+> grammar — and HydraDB does everything relational: identity, traversal,
+> reverse adjacency, batched writes. And we shipped field notes — five real
+> limitations we hit building this, each with a reproduction and the
+> workaround that shipped.
+
+## Beat 5 — The close (2:35–2:55)
+
+**Screen:** the demo page with the alias card visible, then fade to the
+repo README title.
+
+**VO:**
+> Last thing, and it's why this matters beyond one bid set. Every reviewer
+> correction lands in the graph as a stored, traceable fact. When a
+> thirty-year plan reviewer retires, their judgment doesn't walk out the
+> door — it's in the graph, with the traversal that justified every call.
+> Enterprise knowledge that outlives the people who created it — that's the
+> brief's real ask. And everything we measured points one direction: the
+> ceiling is perception, not the graph. Better eyes, same memory.
+> PlanGraph: the drawing set as a graph — on HydraDB.
 
 ---
 
