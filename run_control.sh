@@ -10,7 +10,7 @@ export ANTHROPIC_API_KEY=$(grep -m1 '^ANTHROPIC_API_KEY=' .env | cut -d= -f2- | 
 
 OUT=/c/Dev/plangraph/docs/control_105.tsv
 LOG=/c/Dev/plangraph/docs/control_105.log
-CEILING=75.00                       # hard stop; budget is $83.63
+CEILING=72.36           # $50.36 spent + ~$22 new; balance is $25.63, leave margin
 
 [ -f "$OUT" ] || printf "task\tfamily\treward\tcost_usd\twall_s\tturns\n" > "$OUT"
 
@@ -20,7 +20,8 @@ done_list=$(cut -f1 "$OUT" | tail -n +2)
 spent=$(awk -F'\t' 'NR>1 {s+=$4} END {printf "%.4f", s+0}' "$OUT")
 echo "resuming: $(echo "$done_list" | grep -c . ) done, \$${spent} spent" | tee -a "$LOG"
 
-mapfile -t TASKS < <(tr -d '\r' < /c/Dev/vis4d-archive/bench_local/graph_families.txt)
+mapfile -t TASKS < <(tr -d '
+' < /c/Dev/plangraph/docs/control_remaining.txt)
 
 for T in "${TASKS[@]}"; do
   [ -z "$T" ] && continue
@@ -39,7 +40,7 @@ for T in "${TASKS[@]}"; do
   start=$(date +%s)
   MSYS_NO_PATHCONV=1 timeout 2400 harbor trials start -p "tasks/$T" \
     --agent aec_bench.agents.claude_agent:ClaudeAgent \
-    -m anthropic/claude-sonnet-4-6 </dev/null >>"$LOG" 2>&1
+    -m anthropic/claude-sonnet-4-6 --timeout-multiplier 4 </dev/null >>"$LOG" 2>&1
   wall=$(( $(date +%s) - start ))
   after=$(ls trials 2>/dev/null | wc -l)
 

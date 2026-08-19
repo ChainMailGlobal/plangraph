@@ -35,8 +35,11 @@ class Hydra:
         self.token = token
         self.cell = cell
 
-    def q(self, cypher: str) -> dict:
-        body = json.dumps({"cell_id": self.cell, "query": cypher}).encode()
+    def q(self, cypher: str, parameters: dict | None = None) -> dict:
+        payload = {"cell_id": self.cell, "query": cypher}
+        if parameters:
+            payload["parameters"] = parameters
+        body = json.dumps(payload).encode()
         req = urllib.request.Request(
             self.url,
             data=body,
@@ -91,6 +94,54 @@ class Hydra:
         )
         if "error" in res:
             raise RuntimeError("edge failed: " + str(res["error"]))
+
+    # -- batched writes ---------------------------------------------------
+    #
+    # The UNWIND batch form is the ONLY way to write at speed, and it is also
+    # the only place a bare `MERGE (n {id: ...})` is legal -- the single-
+    # statement form is rejected ("only one-hop edge patterns"). Parameters are
+    # passed as a real JSON array over HTTP; do NOT inline them.
+    # Hard cap is DEFAULT_MAX_PARAMETERS = 1024 rows per call, enforced as
+    # `client_query_batch_items`, so we chunk below that.
+
+    BATCH = 1000
+
+    def put_many(self, label: str, props: list, rows: list) -> int:
+        """Upsert many vertices. Each row needs 'vertex' plus every key in props."""
+        if not rows:
+            return 0
+        sets = ["n:" + label] + ["n." + p + " = row." + p for p in props]
+        cy = ("UNWIND $rows AS row MERGE (n {id: row.vertex}) SET " + ", ".join(sets))
+        n = 0
+        for i in range(0, len(rows), self.BATCH):
+            chunk = rows[i:i + self.BATCH]
+            res = self.q(cy, {"rows": chunk})
+            if "error" in res:
+                raise RuntimeError("put_many(" + label + ") failed: " + str(res["error"]))
+            n += len(chunk)
+        return n
+
+    def edge_many(self, src_label: str, rel: str, dst_label: str,
+                  rows: list, props: list | None = None) -> int:
+        """Create many edges. Each row needs 'src', 'dst', 'rel' (edge id)."""
+        if not rows:
+            return 0
+        props = props or []
+        cy = ("UNWIND $rows AS row "
+              "MATCH (s:" + src_label + " {id: row.src}), (d:" + dst_label + " {id: row.dst}) "
+              "MERGE (s)-[r:" + rel + " {id: row.rel}]->(d)")
+        if props:
+            cy += " SET " + ", ".join("r." + p + " = row." + p for p in props)
+        else:
+            cy += " SET r.k = row.rel"      # SET is required by the batch template
+        n = 0
+        for i in range(0, len(rows), self.BATCH):
+            chunk = rows[i:i + self.BATCH]
+            res = self.q(cy, {"rows": chunk})
+            if "error" in res:
+                raise RuntimeError("edge_many(" + rel + ") failed: " + str(res["error"]))
+            n += len(chunk)
+        return n
 
 
 def esc(s) -> str:

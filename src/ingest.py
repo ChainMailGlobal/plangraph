@@ -177,15 +177,28 @@ def extract(pdf_path, max_pages=None):
 # --- graph build ---------------------------------------------------------
 
 def build(pdf_path, hydra, doc_name=None, max_pages=None, verbose=True):
-    from hydra import esc  # noqa: F401  (kept for symmetry / future use)
+    """Batched build.
 
+    All writes go through the UNWIND batch form. That is not a micro-
+    optimisation: it is the only shape that scales, and it is also the only
+    place a bare `MERGE (n {id: ...})` is legal -- the single-statement form is
+    rejected outright. Requires an object store with conditional puts;
+    LocalFileSystem does NOT implement `put_opts`/`PutMode::Update`, so use the
+    memory or S3/MinIO backend.
+    """
     doc_name = doc_name or pdf_path.replace("\\", "/").split("/")[-1]
     pages = extract(pdf_path, max_pages=max_pages)
 
     doc_v = vid("Document", doc_name)
-    hydra.put(doc_v, {"kind": "document", "name": doc_name, "pages": len(pages)})
+    V_doc = [{"vertex": doc_v, "kind": "document", "name": doc_name,
+              "pages": len(pages)}]
+    V_sheet, V_detail, V_callout = [], [], []
+    E_contains, E_hasdetail, E_references, E_targets = [], [], [], []
 
-    # ---- pass 1: sheets, with alias resolution ----
+    def eid(src, rel, dst):
+        return vid("E", str(src) + "|" + rel + "|" + str(dst))
+
+    # ---- pass 1: sheets, with alias resolution (collect only) ----
     by_norm = {}          # norm_id -> canonical vertex id
     sheet_v = {}          # page number -> vertex id
     n_alias = 0
@@ -200,12 +213,14 @@ def build(pdf_path, hydra, doc_name=None, max_pages=None, verbose=True):
             n_alias += 1        # a second page carrying the same identity
         else:
             by_norm[nid] = v
-            hydra.put(v, {"kind": "sheet", "sheet_no": sn, "norm_id": nid,
-                          "page": p["page"], "canonical": True})
-            hydra.edge(doc_v, "CONTAINS", v)
+            V_sheet.append({"vertex": v, "kind": "sheet", "sheet_no": sn,
+                            "norm_id": nid, "page": p["page"], "canonical": True})
+            E_contains.append({"src": doc_v, "dst": v,
+                               "rel": eid(doc_v, "CONTAINS", v)})
 
-    # ---- pass 2: details present on each sheet ----
+    # ---- pass 2: details present on each sheet (collect only) ----
     details_of = {}       # norm_id -> set of detail tokens
+    seen_detail = set()
     for p in pages:
         sn = p["sheet_no"]
         if not sn:
@@ -213,12 +228,19 @@ def build(pdf_path, hydra, doc_name=None, max_pages=None, verbose=True):
         nid = norm_id(sn)
         details_of.setdefault(nid, set()).update(p["details"])
         for d in p["details"]:
-            dv = vid("Detail", nid + "|" + d)
-            hydra.put(dv, {"kind": "detail", "detail_no": d, "sheet_no": sn})
-            hydra.edge(by_norm[nid], "HAS_DETAIL", dv)
+            key = nid + "|" + d
+            if key in seen_detail:
+                continue
+            seen_detail.add(key)
+            dv = vid("Detail", key)
+            V_detail.append({"vertex": dv, "kind": "detail",
+                             "detail_no": d, "sheet_no": sn})
+            E_hasdetail.append({"src": by_norm[nid], "dst": dv,
+                                "rel": eid(by_norm[nid], "HAS_DETAIL", dv)})
 
-    # ---- pass 3: callouts + RESOLUTION (verdict materialised at ingest) ----
+    # ---- pass 3: callouts + RESOLUTION (verdict materialised; collect only) ----
     n_call = n_ok = n_missing_sheet = n_missing_detail = 0
+    seen_callout = set()
     for p in pages:
         src = sheet_v.get(p["page"])
         if src is None:
@@ -237,24 +259,38 @@ def build(pdf_path, hydra, doc_name=None, max_pages=None, verbose=True):
                 verdict = "missing_detail"
             else:
                 verdict = "ok"
-            cv = vid("Callout", "%s|%s|%s|%s" % (doc_name, p["page"], c["detail"], tgt_norm))
-            hydra.put(cv, {
-                "kind": "callout",
-                "raw": c["raw"],
-                "det_token": c["detail"],
-                "sheet_token": c["sheet"],
-                "src_sheet": p["sheet_no"] or "",
-                "resolved": resolved,
-                "resolution": verdict,
-            })
-            hydra.edge(src, "REFERENCES", cv)
+            ckey = "%s|%s|%s|%s" % (doc_name, p["page"], c["detail"], tgt_norm)
+            cv = vid("Callout", ckey)
+            if cv not in seen_callout:
+                seen_callout.add(cv)
+                V_callout.append({
+                    "vertex": cv, "kind": "callout", "raw": c["raw"],
+                    "det_token": c["detail"], "sheet_token": c["sheet"],
+                    "src_sheet": p["sheet_no"] or "",
+                    "resolved": resolved, "resolution": verdict,
+                })
+                E_references.append({"src": src, "dst": cv,
+                                     "rel": eid(src, "REFERENCES", cv)})
+                if resolved:
+                    E_targets.append({"src": cv, "dst": by_norm[tgt_norm],
+                                      "rel": eid(cv, "TARGETS_SHEET", by_norm[tgt_norm])})
             if resolved:
-                hydra.edge(cv, "TARGETS_SHEET", by_norm[tgt_norm])
                 n_ok += 1
             elif verdict == "missing_sheet":
                 n_missing_sheet += 1
             else:
                 n_missing_detail += 1
+
+    # ---- single write section: batched UNWIND (1000-row chunks) ----
+    hydra.put_many("Document", ["kind", "name", "pages"], V_doc)
+    hydra.put_many("Sheet", ["kind", "sheet_no", "norm_id", "page", "canonical"], V_sheet)
+    hydra.put_many("Detail", ["kind", "detail_no", "sheet_no"], V_detail)
+    hydra.put_many("Callout", ["kind", "raw", "det_token", "sheet_token",
+                               "src_sheet", "resolved", "resolution"], V_callout)
+    hydra.edge_many("Document", "CONTAINS", "Sheet", E_contains)
+    hydra.edge_many("Sheet", "HAS_DETAIL", "Detail", E_hasdetail)
+    hydra.edge_many("Sheet", "REFERENCES", "Callout", E_references)
+    hydra.edge_many("Callout", "TARGETS_SHEET", "Sheet", E_targets)
 
     stats = {"pages": len(pages), "sheets": len(by_norm), "aliases": n_alias,
              "callouts": n_call, "resolved": n_ok,
