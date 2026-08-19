@@ -53,7 +53,7 @@ for task in misses:
     for d in gt.get("defects",[]):
         rep=normalise(d.get("replacement_text") or d.get("original_text") or "").replace(" ","").lower()
         kws=[k.lower() for k in d.get("eval_keywords",[])]
-        in_graph = any(rep and rep in c for c in calls)
+        in_graph = any(c and rep and (rep in c or c in rep) for c in calls)
         in_out   = any(k in out for k in kws) if kws else False
         if not in_graph: bucket="A extraction (callout never captured)"
         elif in_out:     bucket="C format (finding present, keywords missed)"

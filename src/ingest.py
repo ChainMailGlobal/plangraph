@@ -63,6 +63,8 @@ CALLOUT = re.compile(
 
 # a plausible sheet identifier on its own
 SHEET_TOKEN = re.compile(r"^" + SHEET_PAT + r"$")
+# an index ROW as a single span: sheet token, separator, inline title
+ROW_TOKEN = re.compile(r"^(" + SHEET_PAT + r")[ .\-:–—]")
 
 
 
@@ -121,12 +123,121 @@ def corner_sheet_no(spans, W, H):
     """
     best, best_size = None, 0.0
     for text, (x0, y0, x1, y1), size in spans:
+        if x0 > W or y0 > H:
+            continue                      # bbox outside the page: rotation artifact
         if x0 < 0.62 * W or y0 < 0.72 * H:
             continue
         t = text.strip().upper()
         if SHEET_TOKEN.match(t) and size > best_size:
             best, best_size = t, size
+    if best is None:
+        # some title blocks run along the TOP band instead (measured:
+        # saluda set, number at y=0.05H in 50pt against 9pt body). Additive
+        # fallback -- fires only when the corner has nothing: the largest
+        # sheet-shaped token on the page, display-size only.
+        for text, (x0, y0, x1, y1), size in spans:
+            if x0 > W or y0 > H:
+                continue
+            t = text.strip().upper()
+            if size >= 18 and SHEET_TOKEN.match(t) and size > best_size:
+                best, best_size = t, size
     return best
+
+
+INDEX_HEAD = re.compile(r"(SHEET|DRAWING)\s+(INDEX|LIST)|INDEX\s+OF\s+(DRAWINGS|SHEETS)", re.I)
+
+
+def corner_title(spans, W, H, sheet_no):
+    """Sheet title from the title block: the display-size alpha text in the
+    corner region. Titles WRAP across spans ('LEVEL 4 - FLOOR' / 'PLAN -
+    HVAC'), so every span within 85% of the largest size is joined in reading
+    order -- a single-span pick truncates and then reads as a title mismatch."""
+    cands = []
+    for text, (x0, y0, x1, y1), size in spans:
+        if x0 < 0.62 * W or y0 < 0.62 * H:
+            continue
+        t = text.strip()
+        if len(t) < 4 or t.upper() == (sheet_no or "").upper():
+            continue
+        if not re.search(r"[A-Za-z]{3}", t) or SHEET_TOKEN.match(t.upper()):
+            continue
+        cands.append((t.upper(), (x0, y0), size))
+    if not cands:
+        return ""
+    top = max(s for _, _, s in cands)
+    parts = [(pos[1], pos[0], t) for t, pos, s in cands if s >= 0.85 * top]
+    return " ".join(t for _, _, t in sorted(parts))[:80]
+
+
+def index_entries(doc, max_scan=8):
+    """(sheet_no, title) pairs from the drawing-index page.
+
+    The trap (measured): energy-code citations (C403.2.7.1) are sheet-shaped,
+    so a line parser ingests the IECC as an index. Real entries live in an
+    X-ALIGNED LABEL COLUMN with title text beside them; code citations sit
+    inside prose. So: heading page first, then column clustering on spans.
+    """
+    for i in range(min(max_scan, len(doc))):
+        text = normalise(doc[i].get_text())
+        if not INDEX_HEAD.search(text):
+            continue
+        spans = page_spans(doc[i])
+        # two row layouts, both real: (A) sheet token in its OWN span, title
+        # in neighbouring spans; (B) one span per row -- "M1.0 - FLOOR PLAN".
+        toks = []
+        for t, b, s in spans:
+            u = t.strip().upper()
+            if len(u) < 2:
+                continue
+            if SHEET_TOKEN.match(u):
+                toks.append((u, b, None))            # layout A
+                continue
+            m = ROW_TOKEN.match(u)
+            if m and re.search(r"[A-Za-z]{3}", u[m.end():]):
+                inline = u[m.end():].lstrip(" .-:–—")[:80]
+                toks.append((m.group(1), b, inline))  # layout B
+        # cluster sheet tokens by x0 (the label column)
+        cols = {}
+        for t, b, inline in toks:
+            cols.setdefault(round(b[0] / 12), []).append((t, b, inline))
+        entries = []
+        for _, members in cols.items():
+            if len(members) < 4:          # a real index column has many rows
+                continue
+            for t, (x0, y0, x1, y1), inline in members:
+                if inline is not None:
+                    entries.append((t, inline))
+                    continue
+                title_bits = [(b2[0], t2.strip()) for t2, b2, s2 in spans
+                              if b2[0] > x1 and b2[0] < x1 + 0.45 * doc[i].rect.width
+                              and abs((b2[1] + b2[3]) / 2 - (y0 + y1) / 2) < (y1 - y0)
+                              and re.search(r"[A-Za-z]{3}", t2)]
+                title = " ".join(t2 for _, t2 in sorted(title_bits))[:80].upper()
+                entries.append((t, title))
+        # rotated index (drawn at 90 deg): tokens align on y0 instead, each
+        # LINE is a thin vertical lane -- title spans share the token's x lane
+        if not entries:
+            yrows = {}
+            for t, b, inline in toks:
+                yrows.setdefault(round(b[1] / 12), []).append((t, b, inline))
+            for _, members in yrows.items():
+                if len(members) < 4:
+                    continue
+                for t, (x0, y0, x1, y1), inline in members:
+                    if inline is not None:
+                        entries.append((t, inline))
+                        continue
+                    lane = max(8.0, x1 - x0)
+                    title_bits = [(b2[1], t2.strip()) for t2, b2, s2 in spans
+                                  if abs(b2[0] - x0) < 1.5 * lane
+                                  and abs(b2[1] - y0) > 1
+                                  and re.search(r"[A-Za-z]{3}", t2)]
+                    title_bits.sort(key=lambda z: abs(z[0] - y0))
+                    title = " ".join(t2 for _, t2 in title_bits[:4])[:80].upper()
+                    entries.append((t, title))
+        if entries:
+            return entries, i + 1
+    return [], None
 
 
 DETAIL_TOKEN = re.compile(r"^([0-9]{1,2}|[A-Z])$")
@@ -211,6 +322,7 @@ def extract(pdf_path, max_pages=None):
         W, H = pg.rect.width, pg.rect.height
         text = normalise(pg.get_text())
         sheet_no = corner_sheet_no(spans, W, H)
+        title = corner_title(spans, W, H, sheet_no)
         calls = []
         for m in CALLOUT.finditer(text):
             calls.append({"raw": m.group(0).strip(),
@@ -221,11 +333,12 @@ def extract(pdf_path, max_pages=None):
         for b in bubble_callouts(spans):
             if (b["detail"], b["sheet"]) not in seen_pairs:
                 calls.append(b)
-        pages.append({"page": i + 1, "sheet_no": sheet_no,
+        pages.append({"page": i + 1, "sheet_no": sheet_no, "title": title,
                       "text": text, "callouts": calls,
                       "details": sorted(sheet_details(spans, W, H))})
+    entries, idx_page = index_entries(doc)
     doc.close()
-    return pages
+    return pages, entries, idx_page
 
 
 # --- graph build ---------------------------------------------------------
@@ -241,13 +354,13 @@ def build(pdf_path, hydra, doc_name=None, max_pages=None, verbose=True):
     memory or S3/MinIO backend.
     """
     doc_name = doc_name or pdf_path.replace("\\", "/").split("/")[-1]
-    pages = extract(pdf_path, max_pages=max_pages)
+    pages, idx_entries, idx_page = extract(pdf_path, max_pages=max_pages)
 
     doc_v = vid("Document", doc_name)
     V_doc = [{"vertex": doc_v, "kind": "document", "name": doc_name,
               "pages": len(pages)}]
-    V_sheet, V_detail, V_callout = [], [], []
-    E_contains, E_hasdetail, E_references, E_targets = [], [], [], []
+    V_sheet, V_detail, V_callout, V_index = [], [], [], []
+    E_contains, E_hasdetail, E_references, E_targets, E_indexed = [], [], [], [], []
 
     def eid(src, rel, dst):
         return vid("E", str(src) + "|" + rel + "|" + str(dst))
@@ -268,7 +381,9 @@ def build(pdf_path, hydra, doc_name=None, max_pages=None, verbose=True):
         else:
             by_norm[nid] = v
             V_sheet.append({"vertex": v, "kind": "sheet", "sheet_no": sn,
-                            "norm_id": nid, "page": p["page"], "canonical": True})
+                            "norm_id": nid, "page": p["page"], "canonical": True,
+                            "title": p.get("title", ""),
+                            "hosts_index": p["page"] == idx_page})
             E_contains.append({"src": doc_v, "dst": v,
                                "rel": eid(doc_v, "CONTAINS", v)})
 
@@ -335,9 +450,29 @@ def build(pdf_path, hydra, doc_name=None, max_pages=None, verbose=True):
             else:
                 n_missing_detail += 1
 
+    # ---- index entries: the listed-vs-present verdict, materialised ----
+    listed_norms = set()
+    for sn_listed, title_listed in idx_entries:
+        nid = norm_id(sn_listed)
+        if nid in listed_norms:
+            continue
+        listed_norms.add(nid)
+        iv = vid("IndexEntry", doc_name + "|" + nid)
+        present = nid in by_norm
+        V_index.append({"vertex": iv, "kind": "index_entry",
+                        "listed_sheet_no": sn_listed, "listed_title": title_listed,
+                        "present": present})
+        if present:
+            E_indexed.append({"src": iv, "dst": by_norm[nid],
+                              "rel": eid(iv, "INDEXED_AS", by_norm[nid])})
+
     # ---- single write section: batched UNWIND (1000-row chunks) ----
     hydra.put_many("Document", ["kind", "name", "pages"], V_doc)
-    hydra.put_many("Sheet", ["kind", "sheet_no", "norm_id", "page", "canonical"], V_sheet)
+    hydra.put_many("Sheet", ["kind", "sheet_no", "norm_id", "page", "canonical",
+                             "title", "hosts_index"], V_sheet)
+    hydra.put_many("IndexEntry", ["kind", "listed_sheet_no", "listed_title",
+                                  "present"], V_index)
+    hydra.edge_many("IndexEntry", "INDEXED_AS", "Sheet", E_indexed)
     hydra.put_many("Detail", ["kind", "detail_no", "sheet_no"], V_detail)
     hydra.put_many("Callout", ["kind", "raw", "det_token", "sheet_token",
                                "src_sheet", "resolved", "resolution"], V_callout)

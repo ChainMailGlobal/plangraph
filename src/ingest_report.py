@@ -45,7 +45,7 @@ def main():
             err = ""
             try:
                 for pdf in pdfs:
-                    pages = extract(pdf)
+                    pages, _idx, _ip = extract(pdf)
                     n_pages += len(pages)
                     sheets = {norm_id(p["sheet_no"]) for p in pages if p["sheet_no"]}
                     n_sheets += len(sheets)

@@ -130,10 +130,56 @@ def answer_tracing(h, instruction):
 
 
 def answer_sheet_index(h, instruction):
-    """AS-IS run: the graph knows sheets present, but has no IndexEntry
-    extractor yet, so listed-but-absent cannot be derived. Honest minimal
-    answer; expected to score only on clean variants. Measured first."""
-    return [{"title": "No issues found", "sheet_number": "N/A"}]
+    """v2 (measured fix): IndexEntry nodes now exist. Three finding kinds:
+    missing (listed, not present), unlisted (present, not listed), and title
+    mismatch (index title vs title-block title, similar-but-different)."""
+    from ingest import norm_id as _nid
+    entries = h.rows("MATCH (e:IndexEntry) WHERE e.kind = 'index_entry' "
+                     "RETURN e.listed_sheet_no AS sn, e.listed_title AS lt, "
+                     "e.present AS present")
+    sheets = h.rows("MATCH (s:Sheet) WHERE s.canonical = true "
+                    "RETURN s.sheet_no AS sn, s.title AS title, "
+                    "s.hosts_index AS hosts_index")
+    if not entries:
+        return [{"title": "No issues found", "sheet_number": "N/A"}]
+    listed = {_nid(e["sn"]): e for e in entries}
+    present = {_nid(s["sn"]): s for s in sheets}
+    lines = []
+    # presence decided at QUERY time across all documents in the graph --
+    # the stored per-document flag would misfire on split sets
+    for nid, e in listed.items():
+        if nid not in present:
+            lines.append({"title": "Sheet %s ('%s') is listed in the index but "
+                                   "not found in the document (missing sheet)"
+                                   % (e["sn"], (e["lt"] or "")[:40]),
+                          "sheet_number": e["sn"]})
+    for nid, s in present.items():
+        # the sheet HOSTING the index (cover/title sheet) is routinely left
+        # off its own list -- absence there is convention, not a defect
+        if s.get("hosts_index"):
+            continue
+        if nid not in listed:
+            lines.append({"title": "Sheet %s ('%s') exists in the document but "
+                                   "is not listed in the sheet index"
+                                   % (s["sn"], (s["title"] or "")[:40]),
+                          "sheet_number": s["sn"]})
+    for nid, e in listed.items():
+        s = present.get(nid)
+        if not s:
+            continue
+        a = set((e["lt"] or "").split())
+        b = set((s["title"] or "").split())
+        # token-SUBSET means truncation (corner title cut short), not a
+        # defect; a real title edit (DIAGRAM -> DIAGRAMS) is never a subset
+        if (a and b and a != b and not (a <= b or b <= a)
+                and len(a & b) >= max(1, len(a) // 2)):
+            lines.append({"title": "Sheet %s title mismatch: index says '%s' "
+                                   "but title block says '%s'"
+                                   % (e["sn"], e["lt"], s["title"]),
+                          "sheet_number": e["sn"]})
+    if not lines:
+        lines = [{"title": "No issues found", "sheet_number": "N/A"}]
+    return lines
 
 
 def answer_spec_sync(h, instruction):
