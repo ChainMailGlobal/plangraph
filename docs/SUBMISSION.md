@@ -12,7 +12,7 @@ COMPARISON.md numbers land.
 
 **Repository:** https://github.com/ChainMailGlobal/plangraph
 
-**Video:** ⟨YouTube/Loom link — unlisted is fine, test in incognito⟩
+**Video:** https://youtu.be/i4j1v8XbVcU (2:58, submitted)
 
 **Team:** Daniel Kaneshiro (INViSU AI) — sole founder; built with Claude Code
 
@@ -49,7 +49,7 @@ consistent ourselves. Field notes: docs/HYDRADB_NOTES.md.
 
 ---
 
-## Pre-submit checklist
+## Pre-submit checklist — COMPLETED, form submitted 2026-08-20, confirmation received
 
 - [ ] README ⟨FREEZE⟩ cells filled from docs/COMPARISON.md
 - [ ] Repo public — open in incognito
